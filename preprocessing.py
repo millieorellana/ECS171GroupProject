@@ -93,3 +93,15 @@ def to_categories(train, test, n_bins=10):
     X_test[categorical] = encoder.transform(X_test[categorical])
 
     return X_train.astype(int), X_test.astype(int)
+
+def add_label_noise(train, noise_level, seed):
+    """Return a copy of train with a noise_level share of income labels flipped"""
+    noisy = train.copy()
+    rng = np.random.default_rng(seed)
+    n_flip = int(len(noisy) * noise_level)
+    rows = rng.choice(len(noisy), size=n_flip, replace=False)
+
+    income = noisy["income"].to_numpy().copy()
+    income[rows] = 1 - income[rows]
+    noisy["income"] = income
+    return noisy
