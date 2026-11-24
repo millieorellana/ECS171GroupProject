@@ -11,11 +11,14 @@ Usage:
 
 from pathlib import Path
 
+import joblib
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import KBinsDiscretizer, OneHotEncoder, OrdinalEncoder, StandardScaler
 
 DATA_DIR = Path(__file__).parent / "data"
+RESULTS_DIR = Path(__file__).parent / "results"
+MODELS_DIR = Path(__file__).parent / "models"
 
 FEATURES = [
     "age", "workclass", "fnlwgt", "education", "education-num", "marital-status",
@@ -105,3 +108,15 @@ def add_label_noise(train, noise_level, seed):
     income[rows] = 1 - income[rows]
     noisy["income"] = income
     return noisy
+
+def save_predictions(model_name, runs):
+    """Save the test-set P(>50K) of every (noise level, seed) run to results/<model_name>.npz"""
+    noise, seed, probs = zip(*runs)
+    RESULTS_DIR.mkdir(exist_ok=True)
+    np.savez(RESULTS_DIR / f"{model_name}.npz", noise=noise, seed=seed, probs=np.array(probs))
+
+
+def save_model(model_name, noise_level, model):
+    """Save a trained model to models/<model_name>_noise<NN>.joblib, e.g. randomForest_noise20.joblib"""
+    MODELS_DIR.mkdir(exist_ok=True)
+    joblib.dump(model, MODELS_DIR / f"{model_name}_noise{round(noise_level * 100):02d}.joblib", compress=3)

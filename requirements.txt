@@ -1,0 +1,10 @@
+# Exact versions the notebooks, the saved models and the demo were run with (Python 3.14).
+# models/*.joblib may not load with a different scikit-learn version.
+flask==3.1.3
+ipykernel==7.4.0
+joblib==1.6.0
+matplotlib==3.11.2
+numpy==2.5.3
+pandas==3.0.6
+scikit-learn==1.9.1
+seaborn==0.13.2

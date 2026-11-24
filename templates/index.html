@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Naive Bayes under label noise</title>
+<style>
+  :root {
+    --bg: #f6f6f4;
+    --surface: #ffffff;
+    --border: #e4e3df;
+    --text: #0b0b0b;
+    --text-2: #52514e;
+    --text-3: #8a8984;
+    --nb: #2a78d6;
+    --lr: #eb6834;
+    --rf: #1baf7a;
+    --good: #006300;
+    --good-border: #0ca30c;
+    --bad: #d03b3b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; display: flex; min-height: 100vh;
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--text); background: var(--bg);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Person */
+  aside {
+    width: 320px; flex-shrink: 0; height: 100vh; position: sticky; top: 0; overflow-y: auto;
+    padding: 24px 20px; background: var(--surface); border-right: 1px solid var(--border);
+  }
+  .primary {
+    width: 100%; height: 36px; margin: 0 0 10px; border: 0; border-radius: 8px; cursor: pointer;
+    font: inherit; font-weight: 500; color: #fff; background: var(--text);
+  }
+  .primary:hover { background: #2c2c2a; }
+  .check { display: flex; align-items: center; gap: 8px; color: var(--text-2); cursor: pointer; }
+  .check input { margin: 0; accent-color: var(--text); }
+  form { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 12px; }
+  .field { display: grid; grid-template-columns: 112px 1fr; align-items: center; gap: 8px; margin: 6px 0; }
+  .field span { color: var(--text-2); font-size: 13px; }
+  input[type=number], select {
+    width: 100%; height: 30px; padding: 0 8px; font: inherit; font-size: 13px; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+  }
+  select {
+    appearance: none; padding-right: 24px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2352514e' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 9px center;
+  }
+  input[type=number] { -moz-appearance: textfield; }
+  input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  input:focus, select:focus { outline: 2px solid var(--nb); outline-offset: -1px; }
+
+  /* Results */
+  main { flex: 1; min-width: 0; padding: 28px 36px; max-width: 1100px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .noise { display: flex; align-items: center; gap: 12px; color: var(--text-2); }
+  .segmented { display: flex; padding: 3px; background: #ebeae6; border-radius: 8px; }
+  .segmented button {
+    min-width: 48px; height: 28px; border: 0; border-radius: 6px; cursor: pointer;
+    font: inherit; color: var(--text-2); background: transparent;
+  }
+  .segmented button.active { color: var(--text); background: var(--surface); box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); font-weight: 500; }
+
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 24px; }
+  .card, .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+  .card { padding: 18px 20px; }
+  .name { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+  .prob { margin-top: 14px; font-size: 40px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; }
+  .prob small { font-size: 20px; font-weight: 500; color: var(--text-2); }
+  .caption { margin-top: 4px; color: var(--text-3); font-size: 12px; }
+  .bar { position: relative; height: 6px; margin: 14px 0 16px; background: #ebeae6; border-radius: 3px; }
+  .bar div { height: 100%; border-radius: 3px; background: var(--c); }
+  .bar::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--text-3); }
+  dl { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; margin: 0; padding-top: 14px; border-top: 1px solid var(--border); }
+  dt { color: var(--text-2); }
+  dd { margin: 0; font-weight: 500; text-align: right; }
+  .good { color: var(--good); }
+  .bad { color: var(--bad); }
+  .card.right { border-color: var(--good-border); box-shadow: 0 0 0 1px var(--good-border); }
+  .card.wrong { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad); }
+
+  .panel { position: relative; margin-top: 16px; padding: 18px 20px 8px; }
+  .panel-head { display: flex; justify-content: space-between; align-items: center; }
+  .panel-head h3 { margin: 0; font-size: 14px; font-weight: 500; }
+  .legend { display: flex; gap: 16px; color: var(--text-2); font-size: 13px; }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  svg { display: block; width: 100%; margin-top: 8px; }
+  svg .grid { stroke: var(--border); }
+  svg .tick { fill: var(--text-3); font-size: 12px; }
+  svg .label { fill: var(--text-2); font-size: 12px; }
+  svg .current { stroke: var(--text-3); stroke-dasharray: 3 3; }
+  svg .hover { stroke: var(--text-2); }
+  .tooltip {
+    position: absolute; pointer-events: none; padding: 8px 10px; font-size: 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 12px rgb(0 0 0 / 0.08);
+  }
+  .tooltip div { display: flex; align-items: center; gap: 6px; }
+  .tooltip b { margin-left: auto; padding-left: 12px; font-weight: 500; }
+</style>
+</head>
+<body>
+<aside>
+  <button class="primary" id="random">Random person</button>
+  <label class="check"><input type="checkbox" id="disagree"> Only where the models disagree</label>
+  <form id="person">
+    {% for f in features %}
+    <label class="field"><span>{{ f }}</span>
+      {% if f in numeric %}
+      <input type="number" name="{{ f }}" required>
+      {% else %}
+      <select name="{{ f }}">{% for c in categories[f] %}<option>{{ c }}</option>{% endfor %}</select>
+      {% endif %}
+    </label>
+    {% endfor %}
+  </form>
+</aside>
+
+<main>
+  <header>
+    <h1>Naive Bayes under label noise</h1>
+    <div class="noise">Label noise
+      <div class="segmented" id="noise">
+        {% for p in noisePercents %}<button type="button" data-p="{{ p }}">{{ p }}%</button>{% endfor %}
+      </div>
+    </div>
+  </header>
+
+  <section class="cards" id="cards"></section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h3>Test error</h3>
+      <div class="legend" id="legend"></div>
+    </div>
+    <svg id="chart"></svg>
+    <div class="tooltip" id="tooltip" hidden></div>
+  </section>
+</main>
+
+<script>
+const COLORS = { naiveBayes: "var(--nb)", logisticRegression: "var(--lr)", randomForest: "var(--rf)" };
+const form = document.getElementById("person");
+const noiseButtons = [...document.querySelectorAll("#noise button")];
+let noise = Number(noiseButtons[0].dataset.p);
+let groundTruth = null;  // income of the test-set person; null once a field is edited
+let curves = [];
+const label = y => (y ? ">50K" : "≤50K");
+const pct = x => (x * 100).toFixed(1) + "%";
+
+function card(r) {
+  const head = `<div class="name"><span class="dot" style="--c:${COLORS[r.key]}"></span>${r.name}</div>`;
+  if (r.prob === null) return `<article class="card">${head}</article>`;
+  const guess = r.prob > 0.5 ? 1 : 0;  // same rule as predict()
+  const verdict = groundTruth === null ? "" : guess === groundTruth ? "good" : "bad";
+  const border = { good: "right", bad: "wrong", "": "" }[verdict];
+  return `<article class="card ${border}" style="--c:${COLORS[r.key]}">
+    ${head}
+    <div class="prob">${(r.prob * 100).toFixed(1)}<small>%</small></div>
+    <div class="caption">P(&gt;50K)</div>
+    <div class="bar"><div style="width:${r.prob * 100}%"></div></div>
+    <dl>
+      <dt>Prediction</dt><dd class="${verdict}">${label(guess)}</dd>
+      <dt>Ground truth</dt><dd>${groundTruth === null ? "–" : label(groundTruth)}</dd>
+      <dt>Test error</dt><dd>${r.error === null ? "–" : pct(r.error)}</dd>
+    </dl>
+  </article>`;
+}
+
+async function predict() {
+  if (!form.checkValidity()) return;  // a number field is empty: before the first person loads, or cleared by hand
+  const response = await fetch("/predict", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ noise, person: Object.fromEntries(new FormData(form)) }),
+  });
+  document.getElementById("cards").innerHTML = (await response.json()).map(card).join("");
+}
+
+async function randomPerson() {
+  const disagree = document.getElementById("disagree").checked ? 1 : 0;
+  const person = await (await fetch(`/random?noise=${noise}&disagree=${disagree}`)).json();
+  for (const field of form.elements) field.value = person[field.name];
+  groundTruth = person.income;
+  predict();
+}
+
+function setNoise(p) {
+  noise = p;
+  noiseButtons.forEach(b => b.classList.toggle("active", Number(b.dataset.p) === p));
+  predict();
+  drawChart();
+}
+
+function drawChart() {
+  const svg = document.getElementById("chart");
+  const tooltip = document.getElementById("tooltip");
+  document.getElementById("legend").innerHTML = curves
+    .map(c => `<span><span class="dot" style="--c:${COLORS[c.key]}"></span>${c.name}</span>`).join("");
+  if (!curves.length) { svg.innerHTML = ""; return; }
+
+  const W = svg.clientWidth, H = 260, m = { top: 12, right: 140, bottom: 28, left: 40 };
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("height", H);
+  const xs = [...new Set(curves.flatMap(c => c.points.map(p => p[0])))].sort((a, b) => a - b);
+  const values = curves.flatMap(c => c.points.map(p => p[1] * 100));
+  const step = Math.max(...values) - Math.min(...values) > 12 ? 5 : 2;
+  const lo = Math.floor(Math.min(...values) / step) * step, hi = Math.ceil(Math.max(...values) / step) * step;
+  const x = p => m.left + (xs.length > 1 ? (p - xs[0]) / (xs.at(-1) - xs[0]) : 0.5) * (W - m.left - m.right);
+  const y = v => m.top + ((hi - v) / (hi - lo || 1)) * (H - m.top - m.bottom);
+
+  let out = "";
+  for (let t = lo; t <= hi; t += step) {
+    out += `<line class="grid" x1="${m.left}" x2="${W - m.right}" y1="${y(t)}" y2="${y(t)}"/>`;
+    out += `<text class="tick" x="${m.left - 8}" y="${y(t)}" dy="0.32em" text-anchor="end">${t}%</text>`;
+  }
+  for (const p of xs) out += `<text class="tick" x="${x(p)}" y="${H - 6}" text-anchor="middle">${p}%</text>`;
+  out += `<line class="current" x1="${x(noise)}" x2="${x(noise)}" y1="${m.top}" y2="${H - m.bottom}"/>`;
+  out += `<line class="hover" id="hover" y1="${m.top}" y2="${H - m.bottom}" visibility="hidden"/>`;
+
+  const ends = [];
+  for (const c of curves) {
+    const color = COLORS[c.key];
+    out += `<polyline fill="none" stroke-width="2" stroke-linejoin="round" style="stroke:${color}"
+              points="${c.points.map(([p, e]) => `${x(p)},${y(e * 100)}`).join(" ")}"/>`;
+    for (const [p, e] of c.points) {
+      out += `<circle cx="${x(p)}" cy="${y(e * 100)}" r="4" stroke="#fff" stroke-width="2" style="fill:${color}"/>`;
+    }
+    const [p, e] = c.points.at(-1);
+    ends.push({ name: c.name, x: x(p) + 10, y: y(e * 100) });
+  }
+  ends.sort((a, b) => a.y - b.y);  // keep end labels at least 14px apart
+  for (let i = 1; i < ends.length; i++) ends[i].y = Math.max(ends[i].y, ends[i - 1].y + 14);
+  for (const e of ends) out += `<text class="label" x="${e.x}" y="${e.y}" dy="0.32em">${e.name}</text>`;
+  svg.innerHTML = out;
+
+  const nearest = ev => {
+    const mx = ev.clientX - svg.getBoundingClientRect().left;
+    return xs.reduce((a, b) => (Math.abs(x(b) - mx) < Math.abs(x(a) - mx) ? b : a));
+  };
+  svg.onmousemove = ev => {
+    const p = nearest(ev), hover = document.getElementById("hover");
+    hover.setAttribute("x1", x(p)); hover.setAttribute("x2", x(p)); hover.setAttribute("visibility", "visible");
+    tooltip.innerHTML = `<div>${p}% noise</div>` + curves.map(c => {
+      const point = c.points.find(q => q[0] === p);
+      return `<div><span class="dot" style="--c:${COLORS[c.key]}"></span>${c.name}<b>${point ? pct(point[1]) : "–"}</b></div>`;
+    }).join("");
+    tooltip.hidden = false;
+    const left = x(p) + 32;  // the svg sits 20px inside the panel
+    tooltip.style.left = (left + tooltip.offsetWidth > svg.clientWidth ? left - tooltip.offsetWidth - 24 : left) + "px";
+    tooltip.style.top = "56px";
+  };
+  svg.onmouseleave = () => { tooltip.hidden = true; document.getElementById("hover").setAttribute("visibility", "hidden"); };
+  svg.onclick = ev => setNoise(nearest(ev));
+}
+
+document.getElementById("random").onclick = randomPerson;
+noiseButtons.forEach(b => (b.onclick = () => setNoise(Number(b.dataset.p))));
+form.onsubmit = e => e.preventDefault();  // Enter in a field must not reload the page
+form.onchange = () => { groundTruth = null; predict(); };  // an edited person has no known income
+window.onresize = drawChart;
+
+(async () => {
+  curves = await (await fetch("/errors")).json();
+  setNoise(noise);
+  randomPerson();
+})();
+</script>
+</body>
+</html>
